@@ -6,10 +6,7 @@ const (
 	USER     = "postgres"
 	PASSWORD = "123"
 	DBNAME   = "ioc"
-	//	tableName = "edode_table"
 
-	SrcIPTable     = "SourceIP"
-	TimestampTable = "hitTime"
-	IPDataTable    = "IPData"
-	CountryTable   = "Country"
+	SrcIPTableName  = "SourceIP"
+	IPDataTableName = "IPData"
 )

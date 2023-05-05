@@ -9,13 +9,19 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-/*
-SELECT 'CREATE DATABASE <db_name>'
-WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '<db_name>')
-*/
+type DB struct {
+	Database *gorm.DB
+}
+
+func InitDB() *DB {
+	db := &DB{}
+	db.ConnectToDB()
+	db.BuildDatabase()
+	return db
+}
 
 // ConnectToDB creates a database if it doesn't exist
-func ConnectToDB() *gorm.DB {
+func (d *DB) ConnectToDB() {
 	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
 		"password=%s dbname=%s sslmode=disable",
 		HOST, PORT, USER, PASSWORD, DBNAME)
@@ -28,15 +34,46 @@ func ConnectToDB() *gorm.DB {
 	if err != nil {
 		panic(err)
 	}
-	return db
+	d.Database = db
 }
 
-func BuildDatabase(db *gorm.DB) {
-	var err error = db.AutoMigrate(
+func (d *DB) BuildDatabase() {
+	var err error = d.Database.AutoMigrate(
 		&SourceIPDescription{},
 		&IPDataDescription{},
 	)
 	if err != nil {
 		return
 	}
+}
+
+func getRowID(x *gorm.DB, ip string) int {
+	y := &SourceIPDescription{}
+	a, _ := x.Model(&SourceIPDescription{}).Select("id").Where("src_ip = ?", ip).Rows()
+	for a.Next() {
+		err := x.ScanRows(a, y)
+		if err != nil {
+			fmt.Println(err)
+			return 0
+		}
+	}
+	fmt.Printf("Updated data to database: ID: %d, IP: %s\n", y.ID, ip)
+	return y.ID
+}
+
+func (d *DB) UpdateDBRow(sourceIPRow SourceIPDescription) {
+	rowID := getRowID(d.Database, sourceIPRow.SRCIP)
+
+	d.Database.Model(&SourceIPDescription{}).Where("id = ?", rowID).Updates(
+		SourceIPDescription{
+			CountryName: sourceIPRow.CountryName,
+			CountryCode: sourceIPRow.CountryCode,
+			Latitude:    sourceIPRow.Latitude,
+			Longitude:   sourceIPRow.Longitude,
+			City:        sourceIPRow.City,
+			HitCount:    sourceIPRow.HitCount,
+			Time:        sourceIPRow.Time,
+			Protocol:    sourceIPRow.Protocol,
+			EventID:     sourceIPRow.EventID,
+		})
 }

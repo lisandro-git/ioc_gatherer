@@ -20,10 +20,6 @@ type SourceIPDescription struct {
 	EventID     string            `json:"eventID"`
 	IPDataID    int               `json:"-"`
 	IPData      IPDataDescription `json:"IPData,omitempty" gorm:"foreignKey:IPDataID;references:ID"`
-
-	//HitTimeID int               `json:"-"`
-	//CountryID int                `json:"-"`
-	//HITTime   HitTimeDescription `json:"hitTime,omitempty" gorm:"foreignKey:HitTimeID;references:ID"`
 }
 
 func NewSourceIPDescription() *SourceIPDescription {
@@ -31,7 +27,7 @@ func NewSourceIPDescription() *SourceIPDescription {
 }
 
 func (sid *SourceIPDescription) TableName() string {
-	return "sourceip"
+	return SrcIPTableName
 }
 
 type IPDataDescription struct {
@@ -50,7 +46,7 @@ func NewIPDataDescription() *IPDataDescription {
 }
 
 func (ipd *IPDataDescription) TableName() string {
-	return "ipdata"
+	return IPDataTableName
 }
 
 func (ipd *IPDataDescription) PrepareForDB(dnsR IPData.DNSRecord) {
@@ -75,5 +71,4 @@ func (ipd *IPDataDescription) PrepareForDB(dnsR IPData.DNSRecord) {
 	for _, v := range dnsR.TXT {
 		ipd.TXT += v + ";"
 	}
-
 }
