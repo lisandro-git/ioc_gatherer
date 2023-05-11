@@ -6,7 +6,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm/schema"
-	"gorm.io/gorm/logger"
+	"main/cmd"
 )
 
 type DB struct {
@@ -26,7 +26,7 @@ func (d *DB) ConnectToDB() {
 		"password=%s dbname=%s sslmode=disable",
 		HOST, PORT, USER, PASSWORD, DBNAME)
 	db, err := gorm.Open(postgres.Open(psqlInfo), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
+		//Logger: logger.Default.LogMode(logger.Silent),
 		NamingStrategy: schema.NamingStrategy{
 			SingularTable: true,
 		},
@@ -39,17 +39,20 @@ func (d *DB) ConnectToDB() {
 
 func (d *DB) BuildDatabase() {
 	var err error = d.Database.AutoMigrate(
+		&DomainDescription{},
 		&SourceIPDescription{},
 		&IPDataDescription{},
+		//&SubDomainDescription{},
 	)
 	if err != nil {
 		return
 	}
 }
 
-func getRowID(x *gorm.DB, ip string) int {
+func getRowID(x *gorm.DB, ip uint32) int {
 	y := &SourceIPDescription{}
-	a, _ := x.Model(&SourceIPDescription{}).Select("id").Where("src_ip = ?", ip).Rows()
+	b := cmd.IntToIPv4(ip) // Lisandro : Clean this
+	a, _ := x.Model(&SourceIPDescription{}).Select("id").Where("src_ip = ?", b).Rows()
 	for a.Next() {
 		err := x.ScanRows(a, y)
 		if err != nil {

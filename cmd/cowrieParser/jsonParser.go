@@ -9,10 +9,13 @@ import (
 	"log"
 	"strconv"
 	"main/cmd/IPData"
+	"main/cmd"
+	"fmt"
 	"main/cmd/db"
 )
 
 func getGEOIPData(src_ip string) (string, string, string, string) {
+	// Lisandro: return city
 	db, err := geoip2.Open("/root/Downloads/GeoLite2-City_20230421/GeoLite2-City.mmdb")
 	if err != nil {
 		log.Fatal(err)
@@ -30,11 +33,14 @@ func getGEOIPData(src_ip string) (string, string, string, string) {
 	return record.Country.Names["en"], record.Country.IsoCode, lat, long
 }
 
-func getdata(ip string) IPData.DNSRecord {
-	return IPData.NewDnsRecord(nil, []string{ip})
+func getdata(description *db.DomainDescription) []db.DomainDescription {
+	fmt.Println("IP: ", cmd.IntToIPv4(description.IP).String())
+	x := IPData.NewDnsRecord(description)
+
+	return x
 }
 
-func ReadFile(filePath string) []db.SourceIPDescription {
+func ReadFile(filePath string) []db.DomainDescription {
 	data, err := os.Open(filePath)
 	if err != nil {
 		panic(err)
@@ -42,33 +48,36 @@ func ReadFile(filePath string) []db.SourceIPDescription {
 	var fileScanner *bufio.Scanner = bufio.NewScanner(data)
 	fileScanner.Split(bufio.ScanLines)
 
-	var sipArray []db.SourceIPDescription
+	var domArray []db.DomainDescription
 	for fileScanner.Scan() {
+		var redirect bool
 		eventID, _, _, _ := jsonparser.Get([]byte(fileScanner.Text()), "eventid")
 		if string(eventID) != "cowrie.session.connect" {
 			continue
 		}
-		var redirect bool = false
+
+		var dom *db.DomainDescription = db.NewDomainDescription()
 		var sip *db.SourceIPDescription = db.NewSourceIPDescription()
-		var ipdata *db.IPDataDescription = db.NewIPDataDescription()
 
 		srcIP, _, _, _ := jsonparser.Get([]byte(fileScanner.Text()), "src_ip")
 		proto, _, _, _ := jsonparser.Get([]byte(fileScanner.Text()), "protocol")
 		timestamp, _, _, _ := jsonparser.Get([]byte(fileScanner.Text()), "timestamp")
 		sip.CountryName, sip.CountryCode, sip.Latitude, sip.Longitude = getGEOIPData(string(srcIP))
-
 		{
-			sip.SRCIP = string(srcIP)
+			x, _ := cmd.IPv4ToInt(net.ParseIP(string(srcIP)))
+			sip.SRCIP = x
 			sip.Time = string(timestamp)
 			sip.Protocol = string(proto)
 			sip.EventID = string(eventID)
 		}
 
-		for i := 0; i < len(sipArray); i++ {
+		for i := 0; i < len(domArray); i++ {
 			// incrementing hit counts for each IP
-			if sipArray[i].SRCIP == string(srcIP) {
-				sipArray[i].HitCount++
+			x, _ := cmd.IPv4ToInt(net.ParseIP(string(srcIP)))
+			if domArray[i].IP == x {
+				domArray[i].SourceIP.HitCount++
 				// The timestamp is the last time the IP was seen
+				//fmt.Printf("IP %s already exists\n", string(srcIP))
 				redirect = true
 				break
 			}
@@ -76,12 +85,16 @@ func ReadFile(filePath string) []db.SourceIPDescription {
 		if redirect {
 			continue
 		}
+		//fmt.Printf("New IP: %s found\n", string(srcIP))
 		sip.HitCount++
-		ipdata.PrepareForDB(getdata(sip.SRCIP))
+		dom.IP = sip.SRCIP
 
-		sip.IPData = *ipdata
-		sipArray = append(sipArray, *sip)
+		dom.SourceIP = *sip
+
+		a := getdata(dom)
+		for i := 0; i < len(a); i++ {
+			domArray = append(domArray, a[i])
+		}
 	}
-
-	return sipArray
+	return domArray
 }
