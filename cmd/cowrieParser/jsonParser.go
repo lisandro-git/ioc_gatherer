@@ -34,10 +34,20 @@ func getGEOIPData(src_ip string) (string, string, string, string) {
 }
 
 func getdata(description *db.DomainDescription) []db.DomainDescription {
-	fmt.Println("IP: ", cmd.IntToIPv4(description.IP).String())
 	x := IPData.NewDnsRecord(description)
 
 	return x
+}
+
+var total_IPs []string
+
+func appendUnique(n string) {
+	for _, v := range total_IPs {
+		if n == v {
+			return
+		}
+	}
+	total_IPs = append(total_IPs, n)
 }
 
 func ReadFile(filePath string) []db.DomainDescription {
@@ -64,6 +74,7 @@ func ReadFile(filePath string) []db.DomainDescription {
 		timestamp, _, _, _ := jsonparser.Get([]byte(fileScanner.Text()), "timestamp")
 		sip.CountryName, sip.CountryCode, sip.Latitude, sip.Longitude = getGEOIPData(string(srcIP))
 		{
+			appendUnique(string(srcIP))
 			x, _ := cmd.IPv4ToInt(net.ParseIP(string(srcIP)))
 			sip.SRCIP = x
 			sip.Time = string(timestamp)
@@ -92,9 +103,14 @@ func ReadFile(filePath string) []db.DomainDescription {
 		dom.SourceIP = *sip
 
 		a := getdata(dom)
+		if a == nil {
+			domArray = append(domArray, *dom)
+			continue
+		}
 		for i := 0; i < len(a); i++ {
 			domArray = append(domArray, a[i])
 		}
 	}
+	fmt.Println("Total IPs: ", len(total_IPs))
 	return domArray
 }

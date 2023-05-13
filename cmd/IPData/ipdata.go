@@ -84,13 +84,10 @@ func NewDnsRecord(r *db.DomainDescription) []db.DomainDescription {
 		IP:      []uint32{r.IP},
 	}
 	dnsR.GetDomainNames()
-	fmt.Println(dnsR.Domains, "\n")
 
 	if len(dnsR.Domains) == 0 {
 		GetDomainNames_str(r.IP)
 		r.IPData.IP = r.IP
-		fmt.Println(cmd.IntToIPv4(r.IP))
-		fmt.Println(cmd.IntToIPv4(r.IP))
 		return z
 	}
 
@@ -111,7 +108,6 @@ func NewDnsRecord(r *db.DomainDescription) []db.DomainDescription {
 		if domainutil.HasSubdomain(v) {
 			x.Subdomain = v
 			addDNSRecordToStruct(&x, v)
-			fmt.Println(x.IPData.Domain)
 			z = append(z, x)
 		}
 		x = db.DomainDescription{
@@ -122,7 +118,6 @@ func NewDnsRecord(r *db.DomainDescription) []db.DomainDescription {
 		x.Domain = domain
 		x.IPData.Domain = domain
 		addDNSRecordToStruct(&x, domain)
-		fmt.Println(x.IPData.Domain)
 
 		z = append(z, x)
 	}
