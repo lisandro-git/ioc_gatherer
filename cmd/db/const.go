@@ -5,8 +5,13 @@ const (
 	PORT     = 5432
 	USER     = "postgres"
 	PASSWORD = "123"
-	DBNAME   = "ioc"
+	IPDBNAME = "iocdb"
 
 	SrcIPTableName  = "SourceIP"
 	IPDataTableName = "IPData"
+	DomainTableName = "DomainDescription"
+
+	BlacklistTableName = "BlacklistedFile"
+	WhitelistTableName = "WhitelistedFile"
+	FILEDBNAME         = "filelistdb"
 )

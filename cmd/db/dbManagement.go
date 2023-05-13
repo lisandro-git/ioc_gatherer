@@ -13,18 +13,19 @@ type DB struct {
 	Database *gorm.DB
 }
 
-func InitDB() *DB {
+func InitDB(dbname string) *DB {
 	db := &DB{}
-	db.ConnectToDB()
-	db.BuildDatabase()
+	db.ConnectToDB(dbname)
+	db.BuildIPDatabase()
+	db.BuildFileDatabase()
 	return db
 }
 
 // ConnectToDB creates a database if it doesn't exist
-func (d *DB) ConnectToDB() {
+func (d *DB) ConnectToDB(dbname string) {
 	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
 		"password=%s dbname=%s sslmode=disable",
-		HOST, PORT, USER, PASSWORD, DBNAME)
+		HOST, PORT, USER, PASSWORD, dbname)
 	db, err := gorm.Open(postgres.Open(psqlInfo), &gorm.Config{
 		//Logger: logger.Default.LogMode(logger.Silent),
 		NamingStrategy: schema.NamingStrategy{
@@ -37,12 +38,21 @@ func (d *DB) ConnectToDB() {
 	d.Database = db
 }
 
-func (d *DB) BuildDatabase() {
+func (d *DB) BuildIPDatabase() {
 	var err error = d.Database.AutoMigrate(
 		&DomainDescription{},
 		&SourceIPDescription{},
 		&IPDataDescription{},
-		//&SubDomainDescription{},
+	)
+	if err != nil {
+		return
+	}
+}
+
+func (d *DB) BuildFileDatabase() {
+	var err error = d.Database.AutoMigrate(
+		&FileBlacklist{},
+		&FileWhiteList{},
 	)
 	if err != nil {
 		return

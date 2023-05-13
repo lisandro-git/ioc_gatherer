@@ -1,7 +1,6 @@
 package cowrieParser
 
 import (
-	"os"
 	"bufio"
 	"github.com/buger/jsonparser"
 	"github.com/oschwald/geoip2-golang"
@@ -14,103 +13,113 @@ import (
 	"main/cmd/db"
 )
 
-func getGEOIPData(src_ip string) (string, string, string, string) {
+var total_IPs []string
+
+func getGEOIPData(src_ip string, sipd *db.SourceIPDescription) {
 	// Lisandro: return city
-	db, err := geoip2.Open("/root/Downloads/GeoLite2-City_20230421/GeoLite2-City.mmdb")
+	ipdb, err := geoip2.Open("/root/Downloads/GeoLite2-City_20230421/GeoLite2-City.mmdb")
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+	defer ipdb.Close()
 
 	ip := net.ParseIP(src_ip)
-	record, err := db.City(ip)
+	record, err := ipdb.City(ip)
 	if err != nil {
 		log.Fatal(err)
 	}
-	var lat string = strconv.FormatFloat(record.Location.Latitude, 'f', 6, 64)
-	var long string = strconv.FormatFloat(record.Location.Longitude, 'f', 6, 64)
 
-	return record.Country.Names["en"], record.Country.IsoCode, lat, long
+	sipd.City = record.City.Names["en"]
+	sipd.CountryCode = record.Country.IsoCode
+	sipd.CountryName = record.Country.Names["en"]
+	sipd.Latitude = strconv.FormatFloat(record.Location.Latitude, 'f', 6, 64)
+	sipd.Longitude = strconv.FormatFloat(record.Location.Longitude, 'f', 6, 64)
 }
 
 func getdata(description *db.DomainDescription) []db.DomainDescription {
-	x := IPData.NewDnsRecord(description)
-
-	return x
+	return IPData.NewDnsRecord(description)
 }
 
-var total_IPs []string
-
-func appendUnique(n string) {
+func appendUnique(ip string) {
 	for _, v := range total_IPs {
-		if n == v {
+		if ip == v {
 			return
 		}
 	}
-	total_IPs = append(total_IPs, n)
+	total_IPs = append(total_IPs, ip)
 }
 
-func ReadFile(filePath string) []db.DomainDescription {
-	data, err := os.Open(filePath)
-	if err != nil {
-		panic(err)
-	}
-	var fileScanner *bufio.Scanner = bufio.NewScanner(data)
-	fileScanner.Split(bufio.ScanLines)
+func saveWhitelist(fpDB *db.DB, f db.FileWhiteList) {
+	fpDB.Database.Save(&f)
+}
+
+func saveBlacklist(fpDB *db.DB, f *db.FileBlacklist) {
+	fpDB.Database.Save(&f)
+}
+
+var filepathDB *db.DB = db.InitDB(db.FILEDBNAME)
+
+func ReadFile(filePath string) ([]db.DomainDescription, error) {
+	var fileScanner *bufio.Scanner = cmd.ImportDataFile(filePath)
 
 	var domArray []db.DomainDescription
+
 	for fileScanner.Scan() {
-		var redirect bool
-		eventID, _, _, _ := jsonparser.Get([]byte(fileScanner.Text()), "eventid")
+		eventID, _, _, err := jsonparser.Get([]byte(fileScanner.Text()), "eventid")
+		if err != nil {
+			fmt.Println("Error while parsing JSON: ", err)
+			var fileBlacklist *db.FileBlacklist = db.NewFileBlacklist()
+			fileBlacklist.FilePath = filePath
+			fileBlacklist.THash = cmd.HashChunk(cmd.GetChunk(filePath))
+
+			saveBlacklist(filepathDB, fileBlacklist)
+			return nil, err
+		}
 		if string(eventID) != "cowrie.session.connect" {
 			continue
 		}
 
+		{
+			var fileWhiteList *db.FileWhiteList = db.NewFileWhiteList()
+			fileWhiteList.FilePath = filePath
+			fileWhiteList.THash = string(cmd.HashChunk(cmd.GetChunk(filePath)))
+			saveWhitelist(filepathDB, *fileWhiteList)
+		}
+
 		var dom *db.DomainDescription = db.NewDomainDescription()
-		var sip *db.SourceIPDescription = db.NewSourceIPDescription()
 
 		srcIP, _, _, _ := jsonparser.Get([]byte(fileScanner.Text()), "src_ip")
 		proto, _, _, _ := jsonparser.Get([]byte(fileScanner.Text()), "protocol")
 		timestamp, _, _, _ := jsonparser.Get([]byte(fileScanner.Text()), "timestamp")
-		sip.CountryName, sip.CountryCode, sip.Latitude, sip.Longitude = getGEOIPData(string(srcIP))
-		{
-			appendUnique(string(srcIP))
-			x, _ := cmd.IPv4ToInt(net.ParseIP(string(srcIP)))
-			sip.SRCIP = x
-			sip.Time = string(timestamp)
-			sip.Protocol = string(proto)
-			sip.EventID = string(eventID)
-		}
+		getGEOIPData(string(srcIP), &dom.SourceIP)
 
+		intIP, _ := cmd.IPv4ToInt(net.ParseIP(string(srcIP)))
+		dom.IP = intIP
+		dom.SourceIP.SRCIP = intIP
+		dom.SourceIP.Time = string(timestamp)
+		dom.SourceIP.Protocol = string(proto)
+		dom.SourceIP.EventID = string(eventID)
+		appendUnique(string(srcIP))
+
+		// incrementing hit counts for each IP
 		for i := 0; i < len(domArray); i++ {
-			// incrementing hit counts for each IP
-			x, _ := cmd.IPv4ToInt(net.ParseIP(string(srcIP)))
-			if domArray[i].IP == x {
+			if domArray[i].IP == intIP {
 				domArray[i].SourceIP.HitCount++
-				// The timestamp is the last time the IP was seen
-				//fmt.Printf("IP %s already exists\n", string(srcIP))
-				redirect = true
 				break
 			}
 		}
-		if redirect {
-			continue
-		}
-		//fmt.Printf("New IP: %s found\n", string(srcIP))
-		sip.HitCount++
-		dom.IP = sip.SRCIP
 
-		dom.SourceIP = *sip
-
-		a := getdata(dom)
-		if a == nil {
+		// If no other domain is found, the directly goes to dom, else it loops through the domains,
+		// adding them to the final array
+		var domainData []db.DomainDescription = getdata(dom)
+		if domainData == nil {
 			domArray = append(domArray, *dom)
-			continue
-		}
-		for i := 0; i < len(a); i++ {
-			domArray = append(domArray, a[i])
+		} else {
+			for i := 0; i < len(domainData); i++ {
+				domArray = append(domArray, domainData[i])
+			}
 		}
 	}
 	fmt.Println("Total IPs: ", len(total_IPs))
-	return domArray
+	return domArray, nil
 }

@@ -49,43 +49,38 @@ func (sid *SourceIPDescription) TableName() string {
 	return SrcIPTableName
 }
 
-func NewIPDataDescription() *IPDataDescription {
-	return &IPDataDescription{}
-}
-
 func (ipd *IPDataDescription) TableName() string {
 	return IPDataTableName
 }
 
-/*
-func (ipd *IPDataDescription) new_PrepareForDB(dnsR IPData.DNSRecord) {
-
+func (dd *DomainDescription) TableName() string {
+	return DomainTableName
 }
 
-func (ipd *IPDataDescription) old_PrepareForDB(dnsR IPData.DNSRecord) {
-
-	for _, v := range dnsR.Domains {
-		ipd.Domains += v + ";"
-	}
-	for _, v := range dnsR.DomainNames {
-		ipd.DomainNames += v + ";"
-	}
-	for _, v := range dnsR.IP {
-		//x, _ := IPv4ToInt(net.ParseIP(string(v)))
-		ipd.IP = v
-		break // Lisandro : remove the break to add multiple IPs
-	}
-	for _, v := range dnsR.CNAME {
-		ipd.CNAME += v + ";"
-	}
-	for _, v := range dnsR.MX {
-		ipd.MX += v + ";"
-	}
-	for _, v := range dnsR.NS {
-		ipd.NS += v + ";"
-	}
-	for _, v := range dnsR.TXT {
-		ipd.TXT += v + ";"
-	}
+type FileBlacklist struct {
+	ID       int    `json:"ID" gorm:"primaryKey;autoIncrement:true"`
+	FilePath string `json:"FilePath" gorm:"UNIQUE"`
+	THash    string `json:"THash" gorm:"UNIQUE"` // THash = 1024 Hash
 }
-*/
+
+func (fb *FileBlacklist) TableName() string {
+	return BlacklistTableName
+}
+
+type FileWhiteList struct {
+	ID       int    `json:"ID" gorm:"primaryKey;autoIncrement:true"`
+	FilePath string `json:"FilePath" gorm:"UNIQUE"`
+	THash    string `json:"THash" gorm:"UNIQUE"` // THash = 1024 Hash
+}
+
+func NewFileBlacklist() *FileBlacklist {
+	return &FileBlacklist{}
+}
+
+func NewFileWhiteList() *FileWhiteList {
+	return &FileWhiteList{}
+}
+
+func (fw *FileWhiteList) TableName() string {
+	return WhitelistTableName
+}

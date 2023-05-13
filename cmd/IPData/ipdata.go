@@ -19,6 +19,8 @@ type DNSRecord struct {
 	TXT         []string `json:"TXT"`
 }
 
+var totalIP_Domain = []uint32{}
+
 func appendUnique(slice []string, s string) []string {
 	for _, ele := range slice {
 		if ele == s {
@@ -26,20 +28,6 @@ func appendUnique(slice []string, s string) []string {
 		}
 	}
 	return append(slice, s)
-}
-
-func NewEmptyDNSRecord() *DNSRecord {
-	return &DNSRecord{}
-}
-
-func contains(s []uint32, str uint32) bool {
-	for _, v := range s {
-		if v == str {
-			return true
-		}
-	}
-
-	return false
 }
 
 func addDNSRecordToStruct(a *db.DomainDescription, domain string) {
@@ -58,8 +46,6 @@ func addDNSRecordToStruct(a *db.DomainDescription, domain string) {
 	}
 }
 
-var totalIP_Domain = []uint32{}
-
 func removeTrailingDot(domain string) string {
 	if domain[len(domain)-1] == 46 { // 46  = .
 		domain = domain[:len(domain)-1]
@@ -67,62 +53,48 @@ func removeTrailingDot(domain string) string {
 	return domain
 }
 
-func subdomainFirst(description *db.DomainDescription) {
-
-}
-
-func domainFirst(description *db.DomainDescription) {
-
-}
-
-// NewDnsRecord returns a pointer to a new DNSRecord struct
-func NewDnsRecord(r *db.DomainDescription) []db.DomainDescription {
-	var z []db.DomainDescription
-	totalIP_Domain = append(totalIP_Domain, r.IP)
+func NewDnsRecord(domainDescription *db.DomainDescription) []db.DomainDescription {
+	var domainDescriptionArray []db.DomainDescription
+	totalIP_Domain = append(totalIP_Domain, domainDescription.IP)
 	dnsR := DNSRecord{
-		Domains: nil,
-		IP:      []uint32{r.IP},
+		IP: []uint32{domainDescription.IP},
 	}
 	dnsR.GetDomainNames()
 
 	if len(dnsR.Domains) == 0 {
-		GetDomainNames_str(r.IP)
-		r.IPData.IP = r.IP
-		return z
+		GetDomainNames_str(domainDescription.IP)
+		domainDescription.IPData.IP = domainDescription.IP
+		return domainDescriptionArray
 	}
 
-	var domain string
-
-	for _, v := range dnsR.Domains {
-		x := db.DomainDescription{
-			SourceIP: r.SourceIP,
-		}
-		domain = domainutil.Domain(v)
-		if len(v) == 0 {
+	for _, domains := range dnsR.Domains {
+		if len(domains) == 0 {
 			continue
 		}
-		x.IP = r.IP
-		x.IPData.IP = r.IP
-		x.Domain = domain
-		x.IPData.Domain = domain
-		if domainutil.HasSubdomain(v) {
-			x.Subdomain = v
-			addDNSRecordToStruct(&x, v)
-			z = append(z, x)
-		}
-		x = db.DomainDescription{
-			SourceIP: r.SourceIP,
-		}
-		x.IP = r.IP
-		x.IPData.IP = r.IP
-		x.Domain = domain
-		x.IPData.Domain = domain
-		addDNSRecordToStruct(&x, domain)
 
-		z = append(z, x)
+		var domain string = domainutil.Domain(domains)
+
+		newDomain := db.DomainDescription{
+			SourceIP: domainDescription.SourceIP,
+			Domain:   domain,
+			IP:       domainDescription.IP,
+		}
+		newDomain.IPData.IP = domainDescription.IP
+		newDomain.IPData.Domain = domain
+
+		if domainutil.HasSubdomain(domains) {
+			newDomain.Subdomain = domains
+			// ANC 01
+			addDNSRecordToStruct(&newDomain, domains)
+		} else {
+			addDNSRecordToStruct(&newDomain, domain)
+		}
+
+		// Check if domain is already in the database/array + ANC 01
+		domainDescriptionArray = append(domainDescriptionArray, newDomain)
 	}
 
-	return z
+	return domainDescriptionArray
 }
 
 func GetCNAME_str(domain string) string {
